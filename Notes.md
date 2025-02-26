@@ -102,7 +102,7 @@
     2. Lets say you started a kafka connect cluster with 3 workers. These workers are fault tolerant and uses a group id to form a cluster.
     3. The workers are the main workhorse of the Kafka connect. It means they work like a container process, and they will be responsible for starting and running Connector and the task.
        ![Workers in a Kafka connect](./resources/images/connect-arch-1.png)
-    4. These workers are fault tolerant and self managed. It means, if a worker process stops or crashes, other workers will recognize that and reassign the connectors and tasks of the faulty worker to the remaining worker.
+    4. These workers are fault tolerant and self managed. It means, if a worker process stops or crashes, other workers will recognize that and reassign the connectors and tasks of the faulty worker to the remaining worker.  
        ![Faulty Worker in Connect](./resources/images/connect-arch-2.png)
     5. Now, if a new worker joins then others will notice that and assign the connectors or task to the new one.
     6. Thus, the workers will provide you:-
