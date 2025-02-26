@@ -100,7 +100,7 @@
 17. Kafka Connect Architecture:
     1. Kafka connect is a cluster with one or more workers running.
     2. Lets say you started a kafka connect cluster with 3 workers. These workers are fault tolerant and uses a group id to form a cluster.
-    3. The workers are the main workhorse of the Kafka connect. It means they work like a container process, and they will be responsible for starting and running Connector and the task.
+    3. The workers are the main workhorse of the Kafka connect. It means they work like a container process, and they will be responsible for starting and running Connector and the task.  
        ![Workers in a Kafka connect](./resources/images/connect-arch-1.png)
     4. These workers are fault tolerant and self managed. It means, if a worker process stops or crashes, other workers will recognize that and reassign the connectors and tasks of the faulty worker to the remaining worker.  
        ![Faulty Worker in Connect](./resources/images/connect-arch-2.png)
@@ -126,8 +126,8 @@
              2. The connector will also include some additional configurations like database connection details etc to make sure the task can operate as an independent process.
              3. Finally, the list of tasks will be given to the workers so that they can start the task.
              4. The task will be distributed accross the workers for balancing the cluster load.
-                ![Tasks defined and ready to be assigned to workers](./resources/images/connect-arch-4.png)
-                **Tasks assigned:**
+                ![Tasks defined and ready to be assigned to workers](./resources/images/connect-arch-4.png)  
+                **Tasks assigned:**  
                 ![Tasks distributed amoung workers](./resources/images/connect-arch-5.png)
        5. Now the task is reponsible for connecting with the source system, polling the data at a regular interval, collecting the records and handing over it to the worker.
           1. The task will hand over the data to worker only.
