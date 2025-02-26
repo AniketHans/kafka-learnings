@@ -94,8 +94,12 @@
 13. We dont need to create separate cluster for each source and sink. We can have only one Kafka connect cluster and run as many as connectors wanted in it. Some of the connector may work as source connectors and some might work as sink connectors.
 14. We can also have different source/sink connector having different source/sink running in the same cluster. It means some connectors may have RDBMS as source and some might have cassandra as source and similarly some can have snowflake as sink and some can have MongoDB as sink. They all might be running in the same connect cluster.
     ![Same cluster multiple source and sink](./resources/images/kafka-connect-same-cluster-multi-src-sink.png)
-15. Connect Transformations 1. Kafka connect was designed to perform a plain copy or data movement between 3rd party systems and kafka. 2. In both the cases of source or sink, one side must be a Kafka cluster. 3. Kafka connect also allow some fundamental Single Message Transformations (SMTs). It means you can apply some transformations/changes to each message on the fly. 4. Some common SMTs:
-    ![Common smts](./resources/images/common-smts.png)
+15. Connect Transformations
+    1. Kafka connect was designed to perform a plain copy or data movement between 3rd party systems and kafka.
+    2. In both the cases of source or sink, one side must be a Kafka cluster.
+    3. Kafka connect also allow some fundamental Single Message Transformations (SMTs). It means you can apply some transformations/changes to each message on the fly.
+    4. Some common SMTs:  
+       ![Common smts](./resources/images/common-smts.png)
 16. SMTs are not good to perform some real life data validations and transformations.
 17. Kafka Connect Architecture:
     1. Kafka connect is a cluster with one or more workers running.
@@ -135,6 +139,6 @@
        7. In case of sink, the task is only responsible for inserting record into the target system.
        8. Reading and writing data to a kafka cluster is a standard activity so it is taken care of by the Kafka connect framework.
        9. There are 2 things changing for source and target systems and needed to be taken care by a connector developer:
-       10. How to split the input for parallel processing, this is taken care by the Connector class (SourceConnector / SinkConnector)
-       11. How to interact with the external system, this is taken care by the Task class (SourceTask / SinkTask)
-       12. Most of the other stuff like interacting with kafka, error handling etc will be taken care by the Kafka connect framework.
+          1. How to split the input for parallel processing, this is taken care by the Connector class (SourceConnector / SinkConnector)
+          2. How to interact with the external system, this is taken care by the Task class (SourceTask / SinkTask)
+       10. Most of the other stuff like interacting with kafka, error handling etc will be taken care by the Kafka connect framework.
