@@ -142,3 +142,61 @@
           1. How to split the input for parallel processing, this is taken care by the Connector class (SourceConnector / SinkConnector)
           2. How to interact with the external system, this is taken care by the Task class (SourceTask / SinkTask)
        10. Most of the other stuff like interacting with kafka, error handling etc will be taken care by the Kafka connect framework.
+
+### Kafka Streams
+
+1. Stream Processing
+   1. Data streams are unbounded, infinite and ever growing sequence of data sent in small packets (Kbs).
+   2. Eg: Sensor data, App Logs etc
+   3. One common approach for processing the data stream is to first store them in a storage system.
+   4. Now after storing, we can do two things:
+      1. Single Query: Query the data to get answers to a specfic question. This is through the request resposne approach. We ask a question and get answer to the question as quickly as possible.
+      2. Batch of Queries: Here, we create a one big job and to find answers to a bunch of queries and schedule the job to run at regular intervals.
+   5. Stream Processing sits in between the above 2 approaches:
+      1. This is also a data processing work which is done continously.
+      2. In this approach, we ask a question once and the system should give you the most recent version of the answer all the time.
+      3. It is a continous process and the business reports are updated continously based on the data available till the time.
+      4. As we ask one question at a time same as Single Query approach and we contunously ask the question at regular intervals same as Batch of Queries, stream processing sits in between the two.  
+         ![Stream Processing Position](./resources/images/stream-processing-1.png)
+2. Databases and batch processing systems can be used to perform stream processing but dealing with data in real time using those is going to make the solution too complex. Thus, Kafka Streams can be used here.
+3. **Kafka producer, consumer and kafka connect are tools used for data integration. Kafka stream is used for Stream processing.**
+4. Kafka Streams:
+   1. Kafka streams is a library for building applications and microservices where the input data are streamed in Kafka topic.
+   2. You cannot use streams if your data is not comming to a kafka topic. Hence, the starting point of kafka streams is one or more kafka topics.
+   3. As Kafka streams is a simple library, you can use it to bulid applications and you can deloy them to any machine, VM or container.
+   4. The application will inherit parallel processing capability, fault tolerance and scalability provided by kafka streams library out of the box.
+5. Kafka Stream offerings:
+   1. Working with streams/tables and inter-operating with them. It means you can mix and match your solutions with streams and tables and you can even convert a stream to table and vice versa.
+   2. Grouping and Continously updating Aggregates.
+   3. Join streams, table and combination of both.
+   4. Create and manage fault-tolerant, efficient local state stores.
+   5. Creating windows of different types.
+   6. Dealing with all the time related complexities like event time, processing time, latecomers, high watermark, exactly once processing etc.
+   7. It allows you to serve other microservices with request/response interface. This feature is also known as Kafka streams interactive query.
+   8. It provides set of tools for unit testing the application.
+   9. Easy to use DSL and extensibility to create custom processors.
+   10. Inherent fault tolerance and dynamic scalability
+   11. Delpoy your stream processing applications in containers and manage them in kubernetes cluster.
+6. Kafka streams Architecture:
+   1. Kafka streams is all about continously reading of data from one or more kafka topics.
+   2. You develop your application logic to process those streams in real time and take necessary actions.  
+      ![Kafka streams reading data from topics](./resources/images/stream-processing-2.png)
+      1. Suppose you have created a Kafka streams application and deployed it on a single machine. You application will be running outside the Kafka cluster, may be a separate container.
+      2. The application is continously consuming data from 2 topics, T1 and T2 with 3 partitions.
+      3. The application might be monitoring some patient data or traffic data, continously checking some thresholds like patients heart rate or speed monitoring in case of traffic data and sending alerts when the threshold breaks.
+      4. Suppose you have deployed your Streams application on a single machine. Now, the kafka streams application will internally create 3 logical tasks as the maximum number of partitions across the input topics T1 and T2 are 3.  
+         ![Kafka streams logical tasks](./resources/images/stream-processing-3.png)
+      5. The three logical tasks are 3 consumers where each could be consuming from each partition in parallel. The framework automatically creates these tasks.
+      6. The Kafka topic will allocate the partitions evenly to each task. In this case, each partition will have 2 partitions to process.  
+         ![Kafka streams partition assignment](./resources/images/stream-processing-4.png)
+      7. Now, the tasks are ready to be assigned to application threads.
+      8. If you configure the application to run on 2 threads, Kafka would assign one task to each thread. The remaining one will also go to one of the threads as we have lesser number of threads available than the tasks. The task running more than one task will run slow.  
+         ![Tasks assigned to 2 threads](./resources/images/stream-processing-5.png)
+      9. The agenda of each task is to continously listen to the stream data comming from the topics and process it.
+      10. The Kafka streams can be made a multi threaded application by simply setting the number of Max threads.
+      11. Suppose we started to start another instance with a single thread on a different machine. A new thread T3 will be created and one task will automaticaly migarte to the new thread. This happens automatically also known as Task Reassignment.  
+          ![Task reassignment](./resources/images/stream-processing-6.png)
+      12. When task reassignment occurs, tasks partitions and their local estate stores will also migrate from existing thread to the newly added thread.
+      13. Thus, Kafka streams will effectively rebalance the work load among the instances of the application on the granularity of the number of partitions.
+      14. If we add more instances of the same application, they will be doing nothing. If we have machines and threads more than the number of available tasks then it will lead to over provisioning with idle instances.
+      15. In case of any fault to any instance/thread running the task, Kafka streams will automatically restarts the task in one of the remaining running instances.
