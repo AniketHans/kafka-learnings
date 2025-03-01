@@ -200,3 +200,74 @@
       13. Thus, Kafka streams will effectively rebalance the work load among the instances of the application on the granularity of the number of partitions.
       14. If we add more instances of the same application, they will be doing nothing. If we have machines and threads more than the number of available tasks then it will lead to over provisioning with idle instances.
       15. In case of any fault to any instance/thread running the task, Kafka streams will automatically restarts the task in one of the remaining running instances.
+
+### KSQL
+
+1. KSQL is the sql interface to the Kafka streams. It means the things that you do using Kafka streams are available in KSQL.
+2. You can create fault-tolerant stream processing workload without the need to write code in a programming language.
+3. KSQL has 2 operating modes:
+   1. **Interactive mode**: Using a command line CLI or a web based UI. Ideal for development env.
+   2. **Headless mode**: Non interactive mode by submitting KSQL files executed by the KSQL server. Ideal for production env.
+4. KSQL Architecture:
+   1. KSQL comes with 3 components:
+      1. KSQL engine
+      2. REST interface
+      3. KSQL client (CLI/UI)
+   2. KSQL engine and REST interface together forms the **KSQL server**
+   3. KSQL server can be deployed in any of the available modes.
+   4. Multiple KSQL servers can be deployed to form a scalable KSQL cluster. All KSQL servers of the same cluster must use the same deployement modes.  
+      ![KSQL cluster](./resources/images/ksql-1.png)
+   5. KSQL engine is the core component which is responsible for KSQL statement and queries. The engine parses your KSQL statements, build corresponding Kafka streams topology and run them as streams tasks and these streams tasks are executed on the available KSQL servers in the cluster. KSQL server will communicate with the Kafka cluster for reading input and writing output.
+   6. The REST interface is to power the KSQL clients. KSQL client will send the commands to the REST interface, which will internally communicate with the KSQL engine to execute your KSQL queries.
+5. KSQL offerings:
+   1. KSQL allows you to use your Kafka topic as a table and fire SQL like queries over those topics.
+   2. Some eg are:
+      1. Grouping and aggregating on your Kafka topic.
+      2. Grouping and aggregating over a time window.
+      3. Apply filters
+      4. Join 2 topics
+
+### Kafka Solution Patterns
+
+1. There are 3 patterns:
+   1. Data integration
+   2. Micro Service architecture for stream processing
+   3. Real Time streaming in Data Warehouse and Data Lakes
+2. Data integration pattern focuses on data ingestion problem and solve it using Kafka.
+   1. In this scenario, you may have a bunch of independent systems.
+   2. The systems serve a specific purpose: Generate data, store it and own it.
+   3. The systems also need to share/send some parts of the data with other systems
+   4. For this scenario, combination of Kafka brokers, Kafka client APIs and Kafka connect.
+   5. For custom coded applications/bespoke applications, Kafka client apis can be used as we can integrate the producer and consumer behavious in the code.
+   6. For COTS (Commercial Off The Shelf) applications, the applications where the code is prepacked and cant be altered, Kafka connect can be used in this case using the available connectors. If the connector is not available for the COTS application, Kafka connect framework can be used to create one.
+3. Micro Service architecture for stream processing
+   1. Here, Kafka broker, kafka apis or client mostly only producers and kafka streams is used.
+   2. The kafka broker will help in providing data to all the microservices.
+   3. Here, kafka is used for 2 puposes, creating streams and processing streams  
+      ![Stream processing and microservices](./resources/images/microservices-steam-processing.png)
+   4. Kafka producers can be used for creating streams. In case of COTS app, we have to use kafka connect for creating the streams.
+   5. Kafka streams can be used to implement the business logic and achieve you stream processing needs.
+4. Real Time streaming in Data Warehouse and Data Lakes
+   1. Here, you collect data from a bunch of source systems into a Kafka cluster.
+   2. Once data starts comming to your kafka cluster, you will sink all the data into the data lake.
+   3. Once the data is in the data lake, batch processing or stream processing can be applied to the data.
+   4. KSQL offers to use the Kafka cluster as a data warehouse.
+
+### Getting started with Kafka
+
+1. Kafka cluster:
+   1. Open source
+      1. It include Apache Kafka
+      2. It is open source and need experts to maintain if anything goes wrong.
+   2. Commercial Distribution
+      1. Mostly used in productions env by the Orgs.
+      2. It is a paid as professionals will be provided by the provider to look into any issues.
+      3. confluent.io, also known as confluent kafka, is one of the most popular ones.
+   3. Managed Service
+      1. It is a fully managed kafka service in the cloud.
+      2. Here, you dont need to install, run, operate or maintain anything related to kafka clusters.
+      3. Some eg of managed service providers are confluent, amazon etc.
+   4. Note: The options are just to get the kafka clusters, you still need to develop applications for creating and processing data streams.
+2. Kafka Zookeeper
+   1. Zookeeper is a kind of database where kafka brokers will store a bunch of shared info
+   2. It is used as a shared system amound multiple kafka brokers to coordinate amoung themselves

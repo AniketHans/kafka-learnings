@@ -1,0 +1,1 @@
+.\bin\windows\kafka-console-consumer.bat --topic superheros --bootstrap-server localhost:9092 --from-beginning

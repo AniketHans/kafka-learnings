@@ -1,0 +1,1 @@
+%KAFKA_HOME%\bin\windows\kafka-console-producer.bat --topic superheros2 --broker-list localhost:9092

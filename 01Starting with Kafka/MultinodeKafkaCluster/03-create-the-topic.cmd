@@ -1,0 +1,1 @@
+%KAFKA_HOME%\bin\windows\kafka-topics.bat --create --topic superheros2 --partitions 3 --replication-factor 2 --bootstrap-server localhost:9092
