@@ -1,0 +1,1 @@
+%KAFKA_HOME%\bin\windows\kafka-topics.bat --create --bootstrap-server localhost:9092 --topic invoices --partitions 5 --replication-factor 3

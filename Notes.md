@@ -271,3 +271,69 @@
 2. Kafka Zookeeper
    1. Zookeeper is a kind of database where kafka brokers will store a bunch of shared info
    2. It is used as a shared system amound multiple kafka brokers to coordinate amoung themselves
+
+### Kafka Storage Architecture
+
+1. Apache Kafka is just a messaging broker.
+2. Reponsibilites of Kafka broker:
+   1. Receive messages from the producers and acknowledge the successful reciept.
+   2. Store the message in a log file to safeguard it from potential loss
+   3. Deliver the message to the consumer once they request it.
+3. Topics and Partitions
+   1. Kafka organises the messages in topics and Broker creates a log file to store these messages.
+   2. The log files are **Partitioned**, **Replicated** and **Segmented**.  
+      ![Kafka storage overview](./resources/images/kafka-storage-1.png)
+4. Topic:
+   1. Topic is a logical name to group your messages.
+   2. It like a table in database.
+   3. Command to create a kafka topic: `kafka-topics.bat --create --bootstrap-server localhost:9092 --topic <topic-name> --partitions 3 --replication-factor 2`
+5. Topic partition
+   1. A single topic may store millions of messages. Keeping all these in a single file posses latency issues and security/fault threats
+   2. Topic partitions break the topic into smaller parts.
+   3. For Apache Kafka, a partition is just a physical directory.
+   4. Apache kafka will create a separate directory for each topic partition. The number of directories will depend on the number of partitions specified for the topic.
+   5. The partitions will be divided randomly accross the existing running brokers in a cluster.
+6. Topic Replication
+   1. Replication copies define how many copies do you want to maintain for each partition.
+   2. `Total number of replicas (TN) = No. of partitions(NP) x Replication factor(RF)`
+   3. All the replicas will be distributed amoung the available brokers.
+   4. Note: `Replication factor <= No. of brokers in the cluster`
+7. Classification of the partition replicas:
+   1. There are 2 categories:
+      1. Leader Partitions
+      2. Follower Partitions
+   2. When we specify the number of partitions (NP), while creating the topic, Kafka creates NP directories. The NP directories will be called Leader Partitions. The leaders are created first.
+   3. Then if we specify the number of replications for each partition (RF), Kafka will create (RF-1) new copies for each partition. Note: RF-1 because we already have leader partitions created.
+   4. These copies are called Follower partitions.  
+      ![Leader and Follower Partitions](./resources/images/kafka-storage-2.png)
+   5. The command to describe the partitions:
+      `kafka-topics.bat --describe --bootstrap-server localhost:9092 --topic <topic-name>`
+      1. The leader column that we get after running the above command tells the broker id in which the Leader partition exists for a partition.
+8. Kafka Log segments
+   1. The messages are stored within the directories in the log files.
+   2. Also, instead of creating one large file in the partition directory, Kafka creates several smaller files.
+   3. Kafka log files are split into smaller files known as segments
+   4. Understanding the spliting of segment files
+      1. When the partition receives its first message, it stores the message in the first segment.
+      2. The segment file will continue to grow or store messages until the segment limit is reached.
+      3. Once the segment limit is reached, Kafka broker will close the file and start writing the messages to a new file.
+      4. The default segment size is either 1 GB of data or 1 week of data, which ever is smaller.  
+         ![Message written into new segment](./resources/images/kafka-storage-3.png)
+9. Message offsets:
+   1. Each kafka message in the partition is uniquely defined by a 64 bit integer offset.
+   2. The numbering also continues accross the segment to keep the offset unique within the partition.  
+      ![Message offset](./resources/images/kafka-storage-4.png)
+   3. For ease, the segemnt file name is also suffixed by the first offset in that segment.
+   4. The offset is unique within the partition. If you look accross the partitions, the offset starts from zero in each partition.
+   5. For location a message accross the partitions, 3 things are needed:
+      1. Topic name
+      2. Partition number
+      3. Offset number.
+10. Kafka message index:
+    1. Kafka allows consumer to start fetching messages from a given offset.
+    2. To help brokers find the message for a given offset, kafka maintains an index of offsets in `.index` files.
+    3. The index files are also segmented for easy management and they are also stored in the partition directory along with the log file segments.
+    4. Time index
+       1. Kafka also allows consumers to start fetching messages based on timestamp.
+       2. Kafka maintains the timestamp of each message and builds a time index (`.timeindex`) to quickly seek the first message that arrived after the given timestamp
+       3. The time index is also segmented and stored in the partition directory.
