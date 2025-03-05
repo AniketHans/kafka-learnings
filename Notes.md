@@ -337,3 +337,73 @@
        1. Kafka also allows consumers to start fetching messages based on timestamp.
        2. Kafka maintains the timestamp of each message and builds a time index (`.timeindex`) to quickly seek the first message that arrived after the given timestamp
        3. The time index is also segmented and stored in the partition directory.
+
+### Kafka Cluster Architecture
+
+1. Kafka brokers are often configured to form a cluster.
+2. A cluster is a group of workers that work together to share the workload and that helps Apache kafka become distributed and scalable system.
+3. In a distributed system generally, there is a Master node that maintains the list of active cluster members and their states.
+4. Zookeeper
+   1. Kafka cluster is a master less cluster. It means it does not follow a master slave architecture.
+   2. Kafka uses zookeeper to maintain the list of active brokers.
+   3. Every kafka broker has a unique_id that you define in the broker config file. We also specify the zookeeper connection details in the broker config file.
+   4. When the broker starts, it connects to the zookeeper and creates am ephemeral node using broker_id to represent an active broker session.
+   5. The ephemeral node remains intact as long as the broker session with the zookeeper is active.
+   6. When the broker loses connectivity to the zookeeper, the zookeeper automatically removes the ephemeral node.
+   7. The list of active brokers in the cluster is maintained as the list of ephemerao nodes under the `/brokers/ids` path in the zookeeper.  
+      ![Cluster and zookeeper](./resources/images/cluster-arch-1.png)
+   8. To check the active brokers in zookeeper shell, use the command:  
+      ![Active broker check](./resources/images/cluster-arch-2.png)
+5. Kafka cluster controller
+   1. Kafka cluster controller performs the routine administrative activities such as monitoring the list of active brokers and reassigning the work when an active broker leaves the cluster.
+   2. The contoller is not a master. It is simply a broker, amoung the brokers in the cluster, that is elected as a controller to pick up some extra responsibilities.
+   3. It means the controller acts as a regular broker.
+   4. The contoller is reponsible for:-
+      1. Montoring the list of active brokers in the zookeeper.
+      2. When a broker leaves the cluster, its work is reassign the work to other brokers.
+   5. The **first broker** that starts in the cluster becomes the controller by creating an ephemeral controller node in the zookeeper. When other brokers start, they also try to create this controller node, but they receive an exception as `node already exists`, means the controller is already elected.
+   6. The other brokers will start watching the controller node in the zookeeper to disappear. When the controller dies, the controller ephemeral node disappears. Now, every broker again tries to create the controller node in the zookeeper, but only one succeeds.
+   7. The above process ensures that there is always a controller in the cluster.  
+      ![Controller node in cluster](./resources/images/cluster-arch-3.png)
+6. Thus, Zookeeper is the database of the kafka cluster control information.
+7. Partition Allocation and Fault tolerance:
+   1. The topic partitions are independent and each partition is self contained.
+   2. All the information about the partition such as segment files and indexes are stored inside the same partition directory.
+   3. When you create a topic, the responsiblity to create, store and manage partitions is distributed amoung the available brokers in the cluster. Thus, every kafka broker in the cluster is reponsible to manage one or more partitions that are assigned to that broker.
+   4. Kafka cluster brokers may be running on individual machines
+8. Partition Allocation
+   1. Lets say be we have 6 brokers in a kafka cluster, the brokers may be running on individual machines.
+   2. In a large production cluster, lets organize the machines in multiple racks.  
+      ![Broker machine in racks](./resources/images/partition-1.png)
+   3. Racks: In a distributed system, "racks" refer to physical cabinets within a data center where multiple servers are mounted, essentially acting as a structured unit to house and organize computing hardware, allowing for efficient management of power, cooling, and network connectivity within a localized area of the distributed system
+   4. Lets say we have 2 racks with 3 broker machines each.
+   5. Lets say we wanted to create a topic with 10 partitions with a replication factor of 3. It means there are 30 replicas to allocate to 6 brokers.
+   6. For allocating the replicas amoung the brokers, kafka tries to achieve the following goals:
+      1. **Even Distribution**: This ensures the even distribution of work load
+      2. **Fault tolerance**: Duplicate copies must be placed on different machines
+   7. For partition distribution, kafka applies the following steps:
+      1. Make Ordered list of available brokers
+      2. Leader and follower assignment
+   8. Make Ordered list of available brokers:
+      1. Kafka randomly choose one of the brokers from any one of the racks and place it into a list.
+      2. The next broker in the list must be from a different rack.
+      3. Again, a new broker will be added to the ordered list from a different rack.
+      4. Thus, this process goes on until all the brokers are selected.
+      5. In our case, lets say we have the following ordered list formed:  
+         ![Ordered list for our eg](./resources/images/partition-2.png)
+   9. Assigning partition to the ordered list / Leader and follower assignment
+      1. In our case, we have 6 brokers and 30 partitions/replicas to assign.
+      2. Ideally, kafka should place 5 partitions on each broker to evenly distribute the load but we also have to achieve fauolt tolerance.
+      3. The fault tolernace here can be achieved by:
+         1. **Making sure that if one broker fails for some reason, we still have atleast one copy of partitions assigned to it on some other broker.**
+         2. **Also, making sure that if the entire rack fails, we still have copy of the partitions, assigned to the brokers in the failed rack, on a different rack.**
+      4. In our case, all partitions have 3 copies and we have to make sure that all the copies are on different machine.  
+         ![Pre Partition assignment](./resources/images/partition-3.png)
+      5. Once we have the ordered list of brokers, we assign partitions using a round robin method
+      6. Kafka starts with leader partitions and finishes creating all leaders first.  
+         ![Assigning leaders first in round robin](./resources/images/partition-4.png)
+      7. Now, as we have to assign 2 more replicas for each partition, for first set of replicas, we again follow the round robin approach but this time we will start from the second broker in the ordered list first. Thus, we jump one broker from the previous start.  
+         ![Assigning first set of replicas](./resources/images/partition-5.png)
+      8. For 2nd set of replicas, we again jump one broker from the previous start i.e. we will start with the 3rd broker in the ordered list this time in round robin.  
+         ![Assigning second set of replicas](./resources/images/partition-6.png)
+      9. Here, it is observed that evenly distribution is still not achiebed but still the system is fault tolerant.
