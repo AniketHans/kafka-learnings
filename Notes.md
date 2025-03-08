@@ -407,3 +407,81 @@
       8. For 2nd set of replicas, we again jump one broker from the previous start i.e. we will start with the 3rd broker in the ordered list this time in round robin.  
          ![Assigning second set of replicas](./resources/images/partition-6.png)
       9. Here, it is observed that evenly distribution is still not achiebed but still the system is fault tolerant.
+9. Leader and Followers
+   1. A broker can have some Leader partitions and some follower partitions on it based on the partition and replica distribution.
+   2. Thus, the broker has some Leader activities and Follower activities to perform.
+   3. Leader activity:
+      1. For a kafka broker, which has some Leader partitions, it is responsible for all the requests from the Producers and consumers.
+      2. Lets say, some producer wants to send message to a kafka topic. The producer will connect to one of the brokers in the cluster and query for the topic metadata.
+      3. All the brokers can answer to the metadata request, thus the producer can connect to any of the broker and query for the metadata.
+      4. The metadata contains the list of all the leader partitions and respective host and port info.
+      5. Now, after getting the metadata, producer has the list of all the leaders. **It is the producer that decides which partition does it want to send the data.**  
+         ![Producer asking for metadata](./resources/images/partition-7.png)
+      6. After deciding, the producer sends the message to the partition leader broker.
+      7. On receiveing the message, leader broker persists the message in the leader partition and sends back an acknowledgement.  
+         ![Kafka sending ack to producer](./resources/images/partition-8.png)
+      8. If a consumer wants to read the message, it always reads from the leader of the partition.
+      9. Thus, Leader broker of a partition has the responsibility of interacting with the Producer and Consumer.
+   4. Follower activity
+      1. Kafka broker also acts as a follower for the follower partitions assigned to it.
+      2. Followers dont serve producer and consumer requests.
+      3. Their only job is to copy the messages from the leader and stay up to date.
+      4. The aim of the follower is to get elected as a leader when the current leader fails.
+      5. To stay in sync with the leader, follower connects with the leader and requests for the data. Leader sends the messages and follower persists them into the storage.
+      6. This goes on in an infinite loop to ensure followers are insync with the leader.  
+         ![Follower thread](./resources/images/partition-9.png)
+10. The ISR list (In Sync Replica)
+    1. Some followers can still fail to sync with the leader.
+    2. Some common reasons are:
+       1. Network congestion
+       2. Follower broker crash/restart
+    3. Since followers/replicas may be falling behind, leader has one more important job to maintain the list of in sync replicas.
+    4. This list is known as the ISR list of the partition and persisted in the zookeeper (brain of kafka cluster). This list is maintained by the leader broker.
+    5. ISR is critical as all the followers in that list are known to be in-sync with the leader thus those are potential candidates to be elected as a new leader.
+       ![ISR list in zookeeper](./resources/images/partition-10.png)
+    6. How leader know if a follower is synced with it:
+       1. When a follower request for a message from the leader.
+       2. The very first request will be to ask for the message with offset zero(0)
+       3. Suppose leader has 10 messages at the moment, so it will send the 10 message with offsets from (0-9) to the follower.
+       4. Again the follower, will request for the messages with offset 10 this time.
+       5. Thus, when the follower asks for the message from offset 10, leader can assume that the follower has safely persisted all the earlier messages.
+       6. Through the last offset requested by the replica, the leader can tell how far is the replica from it.
+    7. If the replica is not too far, the leader will add the replica to the ISR list else the follower is removed from the ISR list.
+    8. Thus, the ISR list is dynamic.  
+       ![ISR sync](./resources/images/partition-11.png)
+    9. How to define the Not too far
+       1. The follower will always be a little behind the leader as follower need to ask the message from the leader, recieve the message over the network and store it into the partition and again ask for new message,
+       2. The above activities takes time.
+       3. Leader gives follower some minimum time as a margin to decide if the replica is not too far.
+       4. The default value of not too far is 10 sec which can be altered.
+       5. Thus, the replica is kept in the ISR list if they are not more than 10 sec behind the leader.
+       6. If the replica has requested the most recent in the last 10 seconds then it deserves to be in ISR.
+11. Commited VS Uncommited messages
+    1. Suppose we have a not too far value of 10 secs but all the replicas are atleast 11 secs behind the leader thus none of them qualifies for ISR. It means the ISR list is empty.
+    2. Suppose the leader crashed, now if we elect a new leader that is not in the ISR, we might loose the message with crashed leader received during most recent 11 secs. Ideally, we dont want to loose any message.
+    3. The solution is implemented using 2 concepts:
+       1. Committed and Uncommitted msgs
+       2. Minimum in-sync replicas config.
+    4. The leader can be configured to **not consider a message committed until the message is copied at all the followers in the ISR list**
+    5. Thus, at some instance, the leader may have some commited and some uncommited messages. The commited ones are those which are copied to all the replicas.
+    6. Now if the leader crashes, only the uncommited messages are unsynced with the followers/replicas and the uncommited ones are missed.
+    7. The uncommited messages can be resend by the producer. Why? The producers can choose to receive acknowledgement of sent messages only after the message is fully commited.
+    8. Thus, the producer waits for the acknowledgement for a time out period and resends the messages in the absence of commit acknowledgement.
+    9. So, the uncommited messages are lost at the failed leader but the newly elected leader will receive those messages again from the producer.
+    10. This way all the messages can be prevented from getting lost.  
+        ![Committed vs uncommited](./resources/images/commited-uncommited.png)
+12. Minimum ISR list
+    1. The data is considered commited when it is written to all the in-sync replicas.
+    2. Lets assume, we start with 3 replicas and all of them are synced and healthy enough to be in ISR list.  
+       ![ISR with 1 leader and 2 replicas](./resources/images/ISR1.png)
+    3. Assume after some time 2 of them failed thus leader will remove them from ISR.
+    4. In this case, even though we configured the topic to have 3 replicas but we are left with only 1. The single left replica is the leader itself and it is insync.  
+       ![Single replica left in ISR](./resources/images/ISR2.png)
+    5. Now, the data is considered committed when it is written to all the in-sync replicas list even if the list has only one replica.
+    6. Here, data can be fully lost if the leader is also crashed.
+    7. Kafka protects this scenario by setting the Minimum number of in-sync replicas for a topic.
+    8. If the minimum number of ISR is set to 2, it means the committed data is written to atleast 2 replicas.
+    9. The side effect of this setting, if the topic has 3 replicas and minimum in sync replicas are set to 2 then you can only write new messages to a leader partition in topic if atleast 2 of the 3 replicas are in-sync.
+    10. When at least 2 replicas are not in sync, the broker will not accept new messages and reponds with `not enough replicas` exception. It means the leader becomes a read only partition means data can only be consumed until atleast 2 replicas are in sync again.  
+        ![Leader not accepting new message](./resources/images/ISR3.png)
+    11. dasdsa
