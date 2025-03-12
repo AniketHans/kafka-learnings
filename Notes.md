@@ -484,4 +484,72 @@
     9. The side effect of this setting, if the topic has 3 replicas and minimum in sync replicas are set to 2 then you can only write new messages to a leader partition in topic if atleast 2 of the 3 replicas are in-sync.
     10. When at least 2 replicas are not in sync, the broker will not accept new messages and reponds with `not enough replicas` exception. It means the leader becomes a read only partition means data can only be consumed until atleast 2 replicas are in sync again.  
         ![Leader not accepting new message](./resources/images/ISR3.png)
-    11. dasdsa
+
+### Kafka Producer Internals
+
+1. Producer APIs
+
+   1. We need to create a producer by setting some configs and start sending the messages.
+   2. The message should be packages under an specific object (kafka.Message object in case of Golang).
+   3. The message object contains 2 important fields:
+      1. Topic name
+      2. Message value
+   4. We can have some optional values also in the object:
+      1. Target partition
+      2. Timestamp
+      3. Message key:
+         1. Message key is used for many puposes such as partitioning, grouping and joins
+         2. It can be considered as a mandatory argument even if the api does need it.
+   5. After wrapping the message in a message object, it is handed over to the Kafka Producer.  
+      ![Message handed to the Producer](./resources/images/producer-internals-1.png)
+
+2. Kafka producer serializer
+   1. The kafka producer is supposed to transmit the message received to the Kafka broker over the network.
+   2. The kafka producer does not immediately transfer the records
+   3. Every record goes through serialization, partitioning and then it is kept in buffer.  
+      ![Message in producer](./resources/images/producer-internals-2.png)
+   4. The serialization is necessary to send the data over the network. We can explicitly specify the serializers that be used to serialize the message.
+3. Producer partitioner
+   1. We specify the topic name in the message object.
+   2. The topic has multiple partitions and it is the duty of the producer to decide which partition to send the message to.
+   3. Kafka producer comes with a default partitioner which is the most commonly used partitioner.
+   4. Default partitioner takes one of the 2 approaches
+      1. Hash key partitioning
+      2. Round Robin Partitioning
+   5. **Hash Key partitioning** is based on the message key. When the message key exists, the default partitioner will use the hashing algo on the key to determine the partition number for the message.
+   6. This method also takes the total number of partitions as an input. Increasing partitions lead to re-distribution of messages in partitions.
+   7. **Round Robin partitioning** is used when the message key is null.
+   8. Kafka also allows you to implement your partitioning strategy by implementing a custom partitioner.
+4. Message timestamp
+   1. The message object can have an additional timestamp field.
+   2. For real time streaming app, the timestamp is most critical. Every message in kafka is automatically timestamped even if not explicitly timestamped.
+   3. Kafka allows 2 types of message timestamping mechanism:
+      1. Create time
+         1. Time when the message was produced.
+         2. The producer timestamp is used.
+      2. Log Append time
+         1. Time when the message was received at the kafka broker.
+         2. The broker overrides the timestamp received in the message object by its timestamp.
+   4. We can use only one of the above timestamps while creating the topic.
+   5. The default mechanism is Create time.
+   6. The message will always have a timestamp, either the producer time or broker time.
+   7. For your producer applications, create timestamp might be a good choice as you are aware of the timestamping mechanism but for 3rd party app, where the timestamping mechanism is not clear, Log append timestamp can be prefered.
+5. Producer Message buffer
+   1. Once the message is serialized and assigned a target partition, the message sits in the buffer waiting to be transmitted.
+   2. The Producer consists of a partition wise buffer space that holds the records that haven't been send to the server.
+   3. The producer also runs a background I/O thread reponsible for turning these records into requests and transfering them to the cluster.  
+      ![I/O thread](./resources/images/producer-internals-3.png)
+   4. Benefits of buffering
+      1. Asynchronous
+      2. Network Roundtrip Optimisation
+   5. Buffering makes the sending asynchronous. It means the send method will add the message to the buffer and return without blocking. The records are then transferred by the background io thread.
+   6. Buffering also allows the background I/O thread to combine multiple messages from the same buffer and transmit them together for better throughput.
+   7. Buffer space also has a chance of getting filled if the records are generated faster than the transmition to the server. Thus, if the I/O thread takes too long to release the buffer, then the send method throws a Timeout Exception.
+   8. In case of timeout exceptions, the producer memory should be increased. The deafult producer memory is 32 MB.
+6. Producer Retries
+   1. When the broker receives the message, it sends back an acknowledgement.
+   2. If the message is successfully received by broker, broker returns a success acknowledgement. Else, error is returned.
+   3. If the background I/O thread receives an error and does not receive an acknowledgement, it will retry sending the message a number of times before throwing back an error.
+   4. The number of retries can be configured.
+   5. When all the tries are failed, the I/O thread will return the error to the send method.  
+      ![Retries](./resources/images/producer-internals-4.png)
