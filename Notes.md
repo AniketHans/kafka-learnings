@@ -553,3 +553,72 @@
    4. The number of retries can be configured.
    5. When all the tries are failed, the I/O thread will return the error to the send method.  
       ![Retries](./resources/images/producer-internals-4.png)
+
+### Advanced Kafka Producers
+
+1. Horizontal Scaling and Vertical scaling
+   1. When there are 100s of producers sending messages, then there is need to increase the number of brokers in the cluster.
+   2. When you producer application is continously generating messages, then multi threading can be implemented at the producer to continously send the data to the broker.
+2. Multi threading producer
+   1. Lets assume a stock market data provider application, the application recieves tick by tick data packets from the stock exchange over a tcp/ip socket.
+   2. The data packets are arriving at high frequency. Thus multi threaded data handler can be implemented.
+   3. The main thread listens to the socket and reads the data packet as they arrive and immediately hand overs the packet to a different thread for sending the data to the kafka cluster.
+   4. The main thread again starts reading the next packet.
+   5. The other threads of the application are responsible for:
+      1. Uncompressing the packet.
+      2. Reading individual messages from the data packet.
+      3. Validating the message
+      4. Sending it further to the kafka broker.  
+         ![Multilthreaded producer](./resources/images/adv-produ-1.png)
+   6. **Kafka producer is thread safe. You application can share the same producer object ( Producer() ) across multiple threads and send messages in parallel using the same message instance**
+   7. It is not recommended to create multiple Producer() objects within the same application instance.
+3. At least once sematics
+   1. Suppose the producer sends a message to the kafka broker (leader partition) and the kafka broker stores the message in partition. Now the broker sent an achknowledgement to the Producer but due to the some network issues the acknowledgement is not received by the I/O thread of the Kafka producer.
+   2. Thus, the I/O thread will again send the same message to the broker and since there is no mechanism to know if the message is duplicate, this will lead to duplicate records being stored in leader partition.
+   3. This implementation is known as atleast once semantics where we cannot lose messages because we are retrying until we get a success acknowledgement. In this case, we may have duplicates because we dont have a method to identify the duplicate message.
+   4. Kafka is an at least once semantics by default.
+4. At most once semantics
+   1. We can achieve at most once by configuring the retries to zero.
+   2. In this case, you may lose some records but you will never have any duplicate record commited to kafka logs.
+5. Exactly once semantics
+   1. Here, we dont lose anything and also we dont create duplicate records.
+   2. There is an `enable.idempotence=true` kafka producer config. It should be set to `true`.
+   3. After enabling idempotence, there is some changes in the producer api behaviour
+   4. At high level 2 things happen:
+      1. Internal ID for producer instance
+      2. Message sequence number
+   5. Internal ID for producer instance
+      1. Producer will perform an initial handshake with the leader broker and ask for a unique producer id.
+      2. The broker dynamically assigns a unique ID to each producer.
+   6. Message sequence number
+      1. The producer API will start assigning a sequence number to each message.
+      2. The sequence number starts from zero and monotonically increases per partition.
+   7. Now, when the producer I/O thread sends a message to the leader, it is uniquely identified by the producer id and message sequence number.
+   8. If the last commited message on broker is `x` then the next message sequence should have number `x+1`
+   9. This allows the broker to know about the dulicates as well as missing sequence numbers.
+   10. Note: if you are sending duplicate messages from your application itself then there will be duplicate records and thus this is a bug in your application.
+6. Transactions in Kafka producer or Transactional Producer
+   1. Transactional producer is one step ahead of the idempotent producer.
+   2. It provides transactional properties i.e. an ability to write to several partirtions atomically
+   3. Atomicity:
+      1. Either all messages in the same transaction are commited or non of them are commited.
+   4. The topic config for transactional producers are:
+      1. Replication factor >= 3
+      2. min.insync.replicas >= 2
+   5. When you provide transactional id, the idempotence will be enabled automatically.
+   6. Transactional id should be unique for each producer instance. It means you cannot run 2 instances of a producer with same transactional id. If you do so, then one of those transactions will be aborted because 2 instances of the same transaction are illegal.
+   7. The primary purpose of the transactional id is to rollback the older unfinished transactions for the same transaction id in case of producer app bounces or restarts.
+   8. Steps:
+      1. InitTransactions()
+         1. This method performs the necessary checks to ensure any other transaction initiated by previous instances of the same producer is closed.
+         2. It means if an application instance dies, next instance can be guaranteed that any unfinished transactions have been either completed or aborted.
+         3. It also retrieves an internal producer id that will be used in all future messages sent by the producer.
+         4. The producer id is used by the broker to implement idempotence.
+      2. BeginTransaction()
+      3. CommitTransaction()
+   9. All messages sent between BeginTransaction() and CommitTransaction() are considered part of single transaction.
+   10. Aborted transaction messages will not be received by consumers.
+   11. The same producer cannot have multiple open transactions. Old transactions must either be commited or aborted before starting a new transaction.
+   12. The commitTransaction will flush any unsent records before committing the transaction.
+   13. Even if a single message in a transaction failed to deliver then CommitTransaction will throw an exception and abort the transaction.
+   14. In case of mutithreaded app, begin the transaction before running the theads and commit the transaction when all threads completed the transaction.
