@@ -622,3 +622,41 @@
    12. The commitTransaction will flush any unsent records before committing the transaction.
    13. Even if a single message in a transaction failed to deliver then CommitTransaction will throw an exception and abort the transaction.
    14. In case of mutithreaded app, begin the transaction before running the theads and commit the transaction when all threads completed the transaction.
+
+### Kafka Consumers
+
+1. Consumer Group
+   1. If the prodcuer is producing data at a high speed and we have a single consumer to process the data then the consumer application will fall far behind. In case of real time application, if the data is not processed as soon as it is produced then the application will loose its validity of a real time application.
+   2. We have to scale the consuming of data.
+   3. We can scale a consumer application by dividing the work amoung multiple consumers. We need to allow multiple consumers to read from the same topic.
+   4. When we have multiple consumers working in a group and reading data from the same topic, we can split the data amoung the consumers by assigning them one or more partitions.  
+      ![Partitions assigned to consumers in consumer group](./resources/images/consumer-1.png)
+   5. Assigning different partitions to different consumers of the same group ensures each record is delivered to only one consumer in the group.
+   6. The maximum number of consumers in a group <= Total number of topic partitions.
+   7. Kafka offers automatic group management and rebalancing of the workload in a consumer grp. All we need to do is get the `group.id` config.
+   8. Kafka forms a consumer group and adds the consumers to the same group if they have same group.id
+   9. If a consumer fails in a group, the partitions assigned to it will reassigned to other consumers in the same group.
+   10. If a new consumer joins the grp, the workload is again redistributed.
+2. Consumer positions
+   1. Assume that a partition was assigned to a consumer. It processed some messages and crashed.
+   2. Kafka automatic rebalancing will detect the failure of the consumer and reassign the unattended partition to some other consumer in the grp.
+   3. The new consumer should not reprocess the events that are already processed by the crashed consumer.
+   4. Offset uniquely identifies every message in the partition.
+   5. Kafka also maintained 2 offset positions for each partition. These are mainly for the consumer.
+      1. **Current Offset**
+      2. **Commited Offset**
+   6. Current offset posi
+      1. It is the offset of the next record that will be given out to the consumer for the next poll.
+      2. In the beginning, the current offset might be unknown for a new consumer subscription. Thus, we set the `"auto.offset.reset":"earliest" / "latest"`
+      3. If you set to earliest, kafka will set the current offet position to the first record in the partition and start giving you all the messages from the beginning.
+      4. The default value is the latest, which will send only the upcoming messages to the consumer after it is subscribed and ignore all the earlier messages.
+      5. The current offset is persistent to the consumer session. Thus, if the consumer fails, the current offset is determined once again.
+      6. Thus, in case of consumer fail, the new consumer might get the already processed messages.
+   7. Commited Offset posi
+      1. Everytime consumer polls, the consumer first commits the earlier current offset.
+      2. This is know as auto-commit
+      3. The commited offset position is the last offset that has been stored securely at the broker.
+      4. Once the consumer restarts or fails and a new consumer in assigned the partition, the commit offset is used to override the current offset position of the consumer.
+      5. Thus, commited offset is used to avoid duplicate message processing.
+   8. Note: The current offset is determined as earliest or latest when the commited offset is null otherwise its value is overridden by commited offset.  
+      ![Current and Commited offset](./resources/images/consumer-2.png)

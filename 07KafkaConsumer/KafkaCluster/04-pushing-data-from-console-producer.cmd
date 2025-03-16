@@ -1,0 +1,1 @@
+%KAFKA_HOME%\bin\windows\kafka-console-producer.bat --topic english-words --broker-list localhost:9092
